@@ -41,12 +41,42 @@ async function run(args) {
      interceptedRequests.push(interceptedRequest.url());
      interceptedRequest.continue();
    });
+   page.on('response', resp=>{
+  //  console.log("Received data for "+resp.url());
+    
+   });
 
   // Redirect interception
   browser.on('targetchanged', async target => {
   console.log("Redirected to "+target.url());
+/*
+    thepage=target.page();
+    await thepage;
+    console.log(thepage);
+    */
   });
 
+  //
+  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+await page.exposeFunction('nodeLog', (message) => console.log(message));
+
+  await page.evaluateOnNewDocument(() => {
+
+    const observer = new MutationObserver(
+      function() {
+        // communicate with node through console.log method
+        console.log('__mutation')
+       }
+      )
+      const config = {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true
+      }
+      observer.observe(target, config)
+
+});
 
   // FIX URL
   url = args.url[0];
@@ -71,14 +101,14 @@ async function run(args) {
 
 
   // write content
-  content= await page.content();
-  content_file=outputdir+'/pagecontent'
-  await fs.writeFile(content_file,content, function(err) {
+  dom_content= await page.content();
+  dom_file=outputdir+'/dom'
+  await fs.writeFile(dom_file,dom_content, function(err) {
       if(err) {
           return console.log(err);
       }
 
-      console.log("Content saved to "+content_file);
+      console.log("DOM saved to "+content_file);
   });
 
   //write intercepted requests
@@ -94,6 +124,7 @@ async function run(args) {
 
 
 
+//  console.log(html);
   //clean up
 
   browser.close();
