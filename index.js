@@ -145,7 +145,8 @@ if (require.main === module) {
   var args = parser.parseArgs();
   args.url = args.url[0]
 
-  run(args);
+  fetch(args)
+  
 }
 
 // export the fetch function to other modules
