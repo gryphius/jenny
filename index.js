@@ -2,21 +2,20 @@ const puppeteer = require('puppeteer');
 var fs = require('fs');
 var argparse = require('argparse');
 
+async function fetch(args) {
 
-async function run(args) {
-  outputdir='output'
+  var result={}
+  result['requests']=[]
+  result['configuration']={}
+  result['consolelog']=[]
 
-
-  if (!fs.existsSync(outputdir)){
-      fs.mkdirSync(outputdir);
-  }
-
-  screenshot=outputdir+'/screenshot.png'
   arglist=[
     '--no-sandbox',
     '--disable-setuid-sandbox',
     '--timeout 15000',
   ]
+
+  result.configuration['proxy']=args.proxy
   if(args.proxy){
     arglist.push( '--proxy-server='+args.proxy);
   }
@@ -27,6 +26,8 @@ async function run(args) {
     ignoreHTTPSErrors: true,
   });
   const page = await browser.newPage();
+
+  result.configuration['useragent']=args.useragent
   if(args.useragent){
     console.log("Setting user agent to: "+args.useragent)
     page.setUserAgent(args.useragent);
@@ -43,7 +44,7 @@ async function run(args) {
    });
    page.on('response', resp=>{
   //  console.log("Received data for "+resp.url());
-    
+
    });
 
   // Redirect interception
@@ -57,7 +58,11 @@ async function run(args) {
   });
 
   //
-  page.on('console', msg => console.log('PAGE LOG:', msg.text()));
+  page.on('console', msg => {
+    console.log('PAGE LOG:', msg.text())
+    result['consolelog'].push(msg.text())
+  }
+  );
 await page.exposeFunction('nodeLog', (message) => console.log(message));
 
   await page.evaluateOnNewDocument(() => {
@@ -79,7 +84,7 @@ await page.exposeFunction('nodeLog', (message) => console.log(message));
 });
 
   // FIX URL
-  url = args.url[0];
+  url = args.url;
   if (url.indexOf('://') < 0){
     url="http://"+url;
   }
@@ -89,39 +94,23 @@ await page.exposeFunction('nodeLog', (message) => console.log(message));
   console.log("Navigating to: "+url);
   try {
     await page.goto(url);
+    result['configuration']['url']=url
 
   } catch (error) {
     console.error(error);
   }
 
-
   //Take screenshot
-  await page.screenshot({ path: screenshot, fullPage: true });
-  console.log("Saved screenshot to: "+screenshot);
-
+  screenshotdata=await page.screenshot({ fullPage: true });
+  //console.log("Saved screenshot to: "+screenshot);
+  result['fullpagescreenshot']=Buffer.from(screenshotdata).toString('base64')
 
   // write content
   dom_content= await page.content();
-  dom_file=outputdir+'/dom'
-  await fs.writeFile(dom_file,dom_content, function(err) {
-      if(err) {
-          return console.log(err);
-      }
-
-      console.log("DOM saved to "+content_file);
-  });
+  result['pagedom']=Buffer.from(dom_content).toString('base64')
 
   //write intercepted requests
-  requests_file=outputdir+'/requests'
-  requests_content=interceptedRequests.join("\n");
-  await fs.writeFile(requests_file,requests_content, function(err) {
-      if(err) {
-          return console.log(err);
-      }
-
-      console.log("intercepted requests saved to "+requests_file);
-  });
-
+  result['requests']=interceptedRequests
 
 
 //  console.log(html);
@@ -129,30 +118,37 @@ await page.exposeFunction('nodeLog', (message) => console.log(message));
 
   browser.close();
   console.log("Browser closed");
-
+  return result
 }
 
+if (require.main === module) {
+  var ArgumentParser = argparse.ArgumentParser;
+  var parser = new ArgumentParser({
+    version: '0.0.1',
+    addHelp:true,
+    description: 'Argparse example'
+  });
+  parser.addArgument(
+    [ '-p', '--proxy' ],
+    {
+      help: 'the proxy to use'
+    }
+  );
+  parser.addArgument(
+    [ '-u', '--user-agent' ],
+    {
+      help: 'the user agent to use',
+      dest: 'useragent',
+    }
+  );
+  parser.addArgument('url', {nargs: argparse.Const.REMAINDER})
+  var args = parser.parseArgs();
+  args.url = args.url[0]
 
-var ArgumentParser = argparse.ArgumentParser;
-var parser = new ArgumentParser({
-  version: '0.0.1',
-  addHelp:true,
-  description: 'Argparse example'
-});
-parser.addArgument(
-  [ '-p', '--proxy' ],
-  {
-    help: 'the proxy to use'
-  }
-);
-parser.addArgument(
-  [ '-u', '--user-agent' ],
-  {
-    help: 'the user agent to use',
-    dest: 'useragent',
-  }
-);
-parser.addArgument('url', {nargs: argparse.Const.REMAINDER})
-var args = parser.parseArgs();
+  run(args);
+}
 
-run(args);
+// export the fetch function to other modules
+module.exports = {
+  fetch: fetch,
+};
