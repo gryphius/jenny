@@ -32,7 +32,8 @@ app.post('/urlfetch', jsonParser, awaitHandlerFactory(async (req, res) => {
   var ret = JSON.stringify(result)
   res.send(ret)
   res.end()
-  server.close()
+  //exit after every request 
+  //server.close()
 }))
 
 var server=app.listen(3000)
